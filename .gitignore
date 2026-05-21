@@ -1,0 +1,18 @@
+# Local tooling and generated binaries
+tools/
+node_modules/
+
+# Generated OCR page images
+ocr/pages/
+ocr/s4u1/pages/
+*.png
+
+# Local OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/

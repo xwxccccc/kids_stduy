@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>端端英语学习</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" role="img">
+              <circle cx="32" cy="32" r="30" fill="#eef8fc" />
+              <path d="M32 5 44 17v18c0 12-5 20-12 24-7-4-12-12-12-24V17L32 5Z" fill="#f6f8fb" stroke="#5aa8d6" stroke-width="2" />
+              <path d="M23 18 32 7l9 11-5 9h-8l-5-9Z" fill="#dfe7ef" />
+              <path d="M19 25c4-1 9-1 13 2-6 2-10 5-12 9l-1-11Z" fill="#eb6f5c" />
+              <path d="M45 25c-4-1-9-1-13 2 6 2 10 5 12 9l1-11Z" fill="#eb6f5c" />
+              <path d="M24 30c4-2 12-2 16 0v9c0 5-3 9-8 11-5-2-8-6-8-11v-9Z" fill="#ffffff" />
+              <circle cx="27" cy="34" r="2.2" fill="#243447" />
+              <circle cx="37" cy="34" r="2.2" fill="#243447" />
+              <path d="M29 42c2 1.4 4 1.4 6 0" fill="none" stroke="#243447" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M32 27v16" stroke="#5aa8d6" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M16 48c5 5 11 8 16 11 5-3 11-6 16-11" fill="none" stroke="#58bd8b" stroke-width="4" stroke-linecap="round" />
+              <circle cx="32" cy="27" r="3.2" fill="#58bd8b" stroke="#fff" stroke-width="1.5" />
+            </svg>
+          </div>
+          <div>
+            <strong>端端英语学习</strong>
+            <span>Grade 1-6 + S3/S4</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="dashboard">今日学习</button>
+          <button class="nav-item" data-view="words">背单词</button>
+          <button class="nav-item" data-view="spelling">拼写练习</button>
+          <button class="nav-item" data-view="sentences">写句子</button>
+          <button class="nav-item" data-view="reading">分级阅读</button>
+          <button class="nav-item" data-view="report">学习报告</button>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="courseEyebrow">S3 PDF 知识点提炼复习课</p>
+            <h1>每天 20 分钟，完成听、读、拼、写</h1>
+          </div>
+          <div class="picker-group">
+            <label class="grade-picker">
+              <span>课程</span>
+              <select id="gradeSelect" aria-label="选择课程">
+                <option value="1">一年级</option>
+                <option value="2">二年级</option>
+                <option value="3">三年级</option>
+                <option value="4">四年级</option>
+                <option value="5">五年级</option>
+                <option value="6">六年级</option>
+                <option value="S3" selected>S3 复习课</option>
+                <option value="S4">S4 复习课</option>
+              </select>
+            </label>
+            <label class="grade-picker unit-picker" id="unitPicker">
+              <span>单元</span>
+              <select id="unitSelect" aria-label="选择单元"></select>
+            </label>
+          </div>
+        </header>
+
+        <section id="dashboard" class="view active">
+          <div class="hero-panel">
+            <div class="hero-copy">
+              <p class="kicker" id="unitKicker">今日任务</p>
+              <h2 id="dailyTitle">从声音到句子，轻松走一遍</h2>
+              <p id="dailySubtitle">完成单词卡、拼写、句子和阅读理解，系统会记录掌握情况。</p>
+              <div class="pattern-strip" id="patternStrip"></div>
+              <div class="hero-actions">
+                <button class="primary-btn" data-jump="words">开始学习</button>
+                <button class="secondary-btn" data-jump="report">查看报告</button>
+              </div>
+            </div>
+            <div class="learning-visual" aria-hidden="true">
+              <svg viewBox="0 0 420 320">
+                <rect x="52" y="46" width="230" height="178" rx="20" fill="#fff7e8" />
+                <rect x="78" y="74" width="150" height="18" rx="9" fill="#eb6f5c" />
+                <rect x="78" y="112" width="174" height="14" rx="7" fill="#6db7d8" />
+                <rect x="78" y="144" width="126" height="14" rx="7" fill="#58bd8b" />
+                <circle cx="310" cy="92" r="48" fill="#f7c46d" />
+                <path d="M285 92c8 13 41 13 49 0" fill="none" stroke="#344054" stroke-width="8" stroke-linecap="round" />
+                <circle cx="292" cy="78" r="5" fill="#344054" />
+                <circle cx="328" cy="78" r="5" fill="#344054" />
+                <path d="M244 230c24-52 101-50 126 0" fill="#58bd8b" />
+                <rect x="250" y="175" width="111" height="70" rx="18" fill="#ffffff" />
+                <path d="M276 210h58M276 192h38" stroke="#476173" stroke-width="10" stroke-linecap="round" />
+                <path d="M58 254h306" stroke="#d8e6ea" stroke-width="12" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card"><span>今日完成</span><strong id="statDone">0/4</strong></article>
+            <article class="stat-card"><span>掌握单词</span><strong id="statMastered">0</strong></article>
+            <article class="stat-card"><span>当前单元</span><strong id="statUnit">1</strong></article>
+            <article class="stat-card"><span>正确率</span><strong id="statAccuracy">0%</strong></article>
+          </div>
+
+          <div class="task-grid" id="taskGrid"></div>
+        </section>
+
+        <section id="words" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Word Cards</p>
+              <h2>背单词</h2>
+            </div>
+            <div class="section-actions">
+              <div class="segmented-control" aria-label="背单词模式">
+                <button class="active" data-word-mode="study">学习</button>
+                <button data-word-mode="quiz">测验</button>
+              </div>
+              <button class="secondary-btn small" id="shuffleWords">换一个</button>
+            </div>
+          </div>
+          <div class="word-layout">
+            <article class="word-card" id="wordCard"></article>
+            <div class="word-side">
+              <article class="choice-panel" id="wordChoicePanel"></article>
+              <div class="word-list" id="wordList"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="spelling" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Spelling</p>
+              <h2>拼写练习</h2>
+            </div>
+            <button class="secondary-btn small" id="nextSpell">下一题</button>
+          </div>
+          <article class="practice-panel">
+            <p class="prompt-label">根据中文意思和单词空格，选择缺少的字母</p>
+            <h3 id="spellPrompt"></h3>
+            <div class="masked-word" id="maskedWord" aria-label="缺字母单词"></div>
+            <div class="letter-options" id="letterOptions"></div>
+            <p class="feedback" id="spellFeedback" aria-live="polite"></p>
+          </article>
+        </section>
+
+        <section id="sentences" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Sentences</p>
+              <h2>写句子</h2>
+            </div>
+            <button class="secondary-btn small" id="newSentence">换一句</button>
+          </div>
+          <article class="practice-panel">
+            <p class="prompt-label">点击乱序词块，排成正确英文句子</p>
+            <div class="sentence-answer" id="sentenceAnswer" aria-label="已选择的句子"></div>
+            <div class="sentence-chips" id="sentenceChips" aria-label="乱序词库"></div>
+            <div class="hero-actions">
+              <button class="primary-btn" id="checkSentence">检查句子</button>
+              <button class="secondary-btn" id="clearSentence">重新排列</button>
+              <button class="secondary-btn" id="showSample">看例句</button>
+            </div>
+            <p class="feedback" id="sentenceFeedback" aria-live="polite"></p>
+          </article>
+        </section>
+
+        <section id="reading" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Reading</p>
+              <h2>分级阅读</h2>
+            </div>
+            <button class="secondary-btn small" id="readAloud">朗读短文</button>
+          </div>
+          <article class="reading-card">
+            <h3 id="storyTitle"></h3>
+            <p id="storyText"></p>
+            <div id="quizQuestions"></div>
+            <p class="feedback" id="quizFeedback" aria-live="polite"></p>
+          </article>
+        </section>
+
+        <section id="report" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Report</p>
+              <h2>学习报告</h2>
+            </div>
+            <button class="secondary-btn small" id="resetProgress">重置本单元</button>
+          </div>
+          <div class="report-grid">
+            <article class="report-card">
+              <h3>复习建议</h3>
+              <p id="reportAdvice"></p>
+            </article>
+            <article class="report-card">
+              <h3>建议复习词</h3>
+              <div id="weakWords"></div>
+            </article>
+            <article class="report-card wide">
+              <h3>能力条</h3>
+              <div id="skillBars"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="s3-content.js"></script>
+    <script src="s4-content.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
