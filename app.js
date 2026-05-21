@@ -2,7 +2,7 @@ const demoUnit = (grade, theme, words) => ({
   id: `g${grade}-demo`,
   title: `${grade} 年级示例：${theme}`,
   theme,
-  subtitle: "这是保留的年级示例课；S3 复习课已经按 PDF OCR 内容整理为 12 个单元。",
+  subtitle: "",
   words,
   patterns: ["I like ...", "This is ...", "The ... is ..."],
   sentencePrompts: [
@@ -89,8 +89,15 @@ const state = {
   unitIndex: 0,
   wordIndex: 0,
   wordMode: "study",
+  wordQuizAnswered: [],
+  wordQuizComplete: false,
+  reviewWeakOnly: false,
   spellIndex: 0,
+  spellQueue: null,
+  spellingMistakes: [],
+  spellingComplete: false,
   sentenceIndex: 0,
+  sentenceComplete: false,
   quizIndex: 0,
   sentenceChoices: [],
   selectedSentence: [],
@@ -159,6 +166,11 @@ function markDone(taskId) {
   renderReport();
 }
 
+function wordIndexByText(wordText) {
+  const index = currentLesson().words.findIndex((item) => item.word === wordText);
+  return index >= 0 ? index : 0;
+}
+
 function recordAttempt(isCorrect, word) {
   const progress = currentProgress();
   progress.attempts += 1;
@@ -173,9 +185,16 @@ function recordAttempt(isCorrect, word) {
 
 function resetPracticeIndexes() {
   state.wordIndex = 0;
+  state.wordQuizAnswered = [];
+  state.wordQuizComplete = false;
   state.spellIndex = 0;
+  state.spellQueue = null;
+  state.spellingMistakes = [];
+  state.spellingComplete = false;
   state.sentenceIndex = 0;
+  state.sentenceComplete = false;
   state.quizIndex = 0;
+  state.reviewWeakOnly = false;
   state.sentenceChoices = [];
   state.selectedSentence = [];
 }
@@ -183,6 +202,121 @@ function resetPracticeIndexes() {
 function scheduleAdvance(callback) {
   window.clearTimeout(autoAdvanceTimer);
   autoAdvanceTimer = window.setTimeout(callback, 700);
+}
+
+function advanceWord() {
+  state.reviewWeakOnly = false;
+  state.wordIndex = (state.wordIndex + 1) % currentLesson().words.length;
+  renderWords();
+}
+
+function startWords(mode = "study", wordIndex = state.wordIndex, reviewWeakOnly = false) {
+  state.wordMode = mode;
+  state.wordIndex = wordIndex;
+  state.reviewWeakOnly = reviewWeakOnly;
+  state.wordQuizAnswered = [];
+  state.wordQuizComplete = false;
+  setView("words");
+  renderWords();
+}
+
+function startWeakReview() {
+  const weak = currentProgress().weak;
+  if (!weak.length) {
+    startWords("study");
+    return;
+  }
+  startWords("quiz", wordIndexByText(weak[0]), true);
+}
+
+function completeWordStudy(wordText) {
+  const progress = currentProgress();
+  state.reviewWeakOnly = false;
+  if (!progress.mastered.includes(wordText)) progress.mastered.push(wordText);
+  markDone("words");
+
+  if (progress.mastered.length >= currentLesson().words.length) {
+    state.wordMode = "quiz";
+    state.wordIndex = 0;
+    state.wordQuizAnswered = [];
+    state.wordQuizComplete = false;
+    renderWords();
+    return;
+  }
+
+  advanceWord();
+}
+
+function finishWordQuiz() {
+  state.wordQuizComplete = true;
+  markDone("words");
+  renderWords();
+}
+
+function spellingQueue() {
+  return state.spellQueue || currentLesson().words.map((_, index) => index);
+}
+
+function currentSpellWord() {
+  const queue = spellingQueue();
+  const wordIndex = queue[Math.min(state.spellIndex, queue.length - 1)] || 0;
+  return currentLesson().words[wordIndex];
+}
+
+function resetSpellingSession(queue = null) {
+  state.spellQueue = queue;
+  state.spellIndex = 0;
+  state.spellingMistakes = [];
+  state.spellingComplete = false;
+  renderSpelling();
+}
+
+function finishSpelling() {
+  const progress = currentProgress();
+  state.spellingComplete = true;
+  state.spellingMistakes.forEach((wordText) => {
+    if (!progress.weak.includes(wordText)) progress.weak.push(wordText);
+  });
+  markDone("spelling");
+  saveProgress();
+  renderSpelling();
+}
+
+function advanceSpelling() {
+  if (state.spellIndex >= spellingQueue().length - 1) {
+    finishSpelling();
+    return;
+  }
+
+  state.spellIndex += 1;
+  renderSpelling();
+}
+
+function resetSentenceSession() {
+  state.sentenceIndex = 0;
+  state.sentenceChoices = [];
+  state.selectedSentence = [];
+  state.sentenceComplete = false;
+  renderSentence();
+}
+
+function finishSentenceSession() {
+  state.sentenceComplete = true;
+  markDone("sentences");
+  renderSentence();
+}
+
+function advanceSentence() {
+  const prompts = currentLesson().sentencePrompts;
+  if (state.sentenceIndex >= prompts.length - 1) {
+    finishSentenceSession();
+    return;
+  }
+
+  state.sentenceIndex += 1;
+  state.sentenceChoices = [];
+  state.selectedSentence = [];
+  renderSentence();
 }
 
 function shuffle(items) {
@@ -200,6 +334,86 @@ function wordChoiceOptions(targetWord) {
 
 function titleWord(word) {
   return word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : "";
+}
+
+function sentenceExamples(lesson) {
+  const fromPrompts = (lesson.sentencePrompts || []).map((item) => item.sample);
+  const fromWords = (lesson.words || []).map((item) => item.example);
+  const fromStory = (lesson.story?.text || "").match(/[^.!?]+[.!?]/g) || [];
+  return [...fromPrompts, ...fromWords, ...fromStory]
+    .map((item) => item?.trim())
+    .filter(Boolean);
+}
+
+function patternMatcher(pattern) {
+  const escaped = pattern
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\\\.\\\.\\\./g, ".+")
+    .replace(/a\/an/g, "(?:a|an)")
+    .replace(/He\/She/g, "(?:He|She)")
+    .replace(/on\/in\/under/g, "(?:on|in|under)");
+  return new RegExp(`^${escaped.replace(/\s+/g, "\\s+")}[.!?]?$`, "i");
+}
+
+function patternUsage(pattern) {
+  if (pattern.startsWith("It's a/an")) return "用来介绍动物或物品是什么。";
+  if (pattern.startsWith("It's not")) return "用来说明它不是某个东西。";
+  if (pattern.startsWith("Look at")) return "用来请别人看某个东西。";
+  if (pattern.startsWith("It has")) return "用来描述动物或物品有什么。";
+  if (pattern.startsWith("It can")) return "用来说明它会做什么。";
+  if (pattern.startsWith("This is my")) return "用来介绍自己的家人或物品。";
+  if (pattern.startsWith("I'm")) return "用来表达自己的感觉或计划。";
+  if (pattern.startsWith("Touch your")) return "用来发出身体动作指令。";
+  if (pattern.includes("Where")) return "用来询问地点。";
+  if (pattern.includes("How many")) return "用来询问数量。";
+  if (pattern.includes("like")) return "用来表达喜欢或不喜欢。";
+  if (pattern.includes("want")) return "用来表达想要。";
+  if (pattern.includes("Put")) return "用来发出放置或穿脱指令。";
+  if (pattern.includes("What")) return "用来提问并开始对话。";
+  return "先读熟句型，再替换关键词造句。";
+}
+
+function patternExample(pattern, lesson, index) {
+  const matcher = patternMatcher(pattern);
+  const examples = sentenceExamples(lesson);
+  return examples.find((example) => matcher.test(example)) || examples[index % examples.length] || pattern.replace("...", "word");
+}
+
+function keyWords(lesson) {
+  return lesson.words.slice(0, 8);
+}
+
+function renderKnowledgeSection(title, items, type) {
+  return `
+    <article class="knowledge-section ${type}">
+      <h4>${title}</h4>
+      <div class="knowledge-list">
+        ${items.join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderKnowledgePoint(pattern, lesson, index) {
+  return `
+    <div class="knowledge-point">
+      <strong>${pattern}</strong>
+      <span>${patternUsage(pattern)}</span>
+      <em>${patternExample(pattern, lesson, index)}</em>
+    </div>
+  `;
+}
+
+function renderKnowledge(lesson) {
+  const wordItems = keyWords(lesson).map((item) => `
+    <div class="word-chip"><strong>${titleWord(item.word)}</strong><span>${item.meaning}</span></div>
+  `);
+  const patternItems = lesson.patterns.map((pattern, index) => renderKnowledgePoint(pattern, lesson, index));
+
+  return [
+    renderKnowledgeSection("重点单词", wordItems, "words"),
+    renderKnowledgeSection("核心句型", patternItems, "patterns")
+  ].join("");
 }
 
 function sentenceTokens(prompt) {
@@ -277,15 +491,28 @@ function renderDashboard() {
   const doneCount = tasks.filter((task) => progress.done[task.id]).length;
   const unitCount = currentUnits().length;
 
-  document.getElementById("courseEyebrow").textContent = state.level === "S3" || state.level === "S4" ? `${state.level} PDF 知识点提炼复习课` : "原创小学英语学习原型";
+  document.getElementById("courseEyebrow").textContent = courseLabels[state.level];
   document.getElementById("unitKicker").textContent = `${courseLabels[state.level]} · ${lesson.theme}`;
   document.getElementById("dailyTitle").textContent = lesson.title;
-  document.getElementById("dailySubtitle").textContent = lesson.subtitle;
-  document.getElementById("patternStrip").innerHTML = lesson.patterns.map((pattern) => `<span>${pattern}</span>`).join("");
+  const dailySubtitle = document.getElementById("dailySubtitle");
+  const subtitle = lesson.subtitle?.startsWith("基于") ? "" : lesson.subtitle;
+  dailySubtitle.textContent = subtitle;
+  dailySubtitle.hidden = !subtitle;
+  document.getElementById("knowledgeGrid").innerHTML = renderKnowledge(lesson);
   document.getElementById("statDone").textContent = `${doneCount}/4`;
   document.getElementById("statMastered").textContent = progress.mastered.length;
   document.getElementById("statUnit").textContent = `${state.unitIndex + 1}/${unitCount}`;
   document.getElementById("statAccuracy").textContent = `${progress.attempts ? Math.round((progress.correct / progress.attempts) * 100) : 0}%`;
+  document.querySelectorAll("[data-review-weak]").forEach((button) => {
+    button.disabled = progress.weak.length === 0;
+    button.textContent = progress.weak.length ? `复习错词 ${progress.weak.length}` : "暂无错词";
+  });
+  document.getElementById("dashboardWeakWords").innerHTML = progress.weak.length ? `
+    <strong>错词</strong>
+    <div>
+      ${progress.weak.map((wordText) => `<button class="weak-chip" data-review-word="${wordText}">${titleWord(wordText)}</button>`).join("")}
+    </div>
+  ` : "";
 
   document.getElementById("taskGrid").innerHTML = tasks.map((task) => `
     <article class="task-card ${progress.done[task.id] ? "complete" : ""}">
@@ -307,16 +534,29 @@ function renderWords() {
     button.classList.toggle("active", button.dataset.wordMode === state.wordMode);
   });
 
+  if (isQuiz && state.wordQuizComplete) {
+    document.getElementById("wordCard").innerHTML = `
+      <p class="prompt-label">测验完成</p>
+      <div class="meaning quiz-meaning">全部完成</div>
+      <div class="hero-actions">
+        <button class="primary-btn" data-retry-word-quiz>再练一次</button>
+      </div>
+    `;
+    document.getElementById("wordChoicePanel").hidden = true;
+    document.querySelector(".word-layout").classList.add("quiz-mode");
+    document.getElementById("wordList").innerHTML = "";
+    return;
+  }
+
   document.getElementById("wordCard").innerHTML = isQuiz ? `
-    <p class="prompt-label">看中文，选择正确英文</p>
+    <p class="prompt-label">${state.wordQuizAnswered.length + 1}/${lesson.words.length} · 看中文选英文</p>
     <div class="meaning quiz-meaning">${word.meaning}</div>
-    <p class="example">不要看词卡，直接回忆这个中文对应的英文单词。</p>
     <div class="choice-options">
       ${wordChoiceOptions(word.word).map((option) => `<button class="option-btn" data-word-choice="${option}">${titleWord(option)}</button>`).join("")}
     </div>
     <p class="feedback" id="wordChoiceFeedback" aria-live="polite"></p>
   ` : `
-    <p class="prompt-label">核心词 ${state.wordIndex + 1}/${lesson.words.length}</p>
+    <p class="prompt-label">${state.wordIndex + 1}/${lesson.words.length} · 已掌握 ${progress.mastered.length}</p>
     <div class="word">${titleWord(word.word)}</div>
     <div class="meaning">${word.meaning}</div>
     <p class="example">${word.example}</p>
@@ -326,11 +566,7 @@ function renderWords() {
     </div>
   `;
 
-  document.getElementById("wordChoicePanel").innerHTML = `
-    <p class="prompt-label">${isQuiz ? "当前模式" : "下一步"}</p>
-    <h3>${isQuiz ? "测验中" : "准备好了再测"}</h3>
-    <p>${isQuiz ? "答对后会自动进入下一个中文。" : "先看词卡、听发音、读例句，然后切换到测验模式。"}</p>
-  `;
+  document.getElementById("wordChoicePanel").hidden = true;
 
   document.querySelector(".word-layout").classList.toggle("quiz-mode", isQuiz);
   document.getElementById("wordList").innerHTML = lesson.words.map((item, index) => `
@@ -342,10 +578,33 @@ function renderWords() {
 }
 
 function renderSpelling() {
-  const word = currentLesson().words[state.spellIndex];
+  const nextSpellButton = document.getElementById("nextSpell");
+  nextSpellButton.hidden = state.spellingComplete;
+
+  if (state.spellingComplete) {
+    const missed = state.spellingMistakes;
+    document.getElementById("letterOptions").classList.add("summary-actions");
+    document.querySelector("#spelling .prompt-label").textContent = "本轮完成";
+    document.getElementById("spellPrompt").textContent = missed.length ? `错了 ${missed.length} 个` : "全部答对";
+    document.getElementById("maskedWord").innerHTML = "";
+    document.getElementById("letterOptions").innerHTML = `
+      <button class="primary-btn" data-retry-spelling>再练一次</button>
+      ${missed.length ? `<button class="secondary-btn" data-review-spelling>复习错词</button>` : ""}
+    `;
+    document.getElementById("spellFeedback").textContent = missed.length
+      ? missed.map((wordText) => titleWord(wordText)).join(" · ")
+      : "很稳，去做下一项吧。";
+    document.getElementById("spellFeedback").className = `feedback ${missed.length ? "warn" : "ok"}`;
+    return;
+  }
+
+  const queue = spellingQueue();
+  const word = currentSpellWord();
   const data = maskedWordData(word.word);
+  nextSpellButton.textContent = state.spellIndex >= queue.length - 1 ? "完成" : "下一题";
+  document.getElementById("letterOptions").classList.remove("summary-actions");
   document.getElementById("spellPrompt").textContent = word.meaning;
-  document.querySelector("#spelling .prompt-label").textContent = `${data.hint}，读一读前后字母再选择`;
+  document.querySelector("#spelling .prompt-label").textContent = `${state.spellIndex + 1}/${queue.length} · ${data.hint}`;
   document.getElementById("maskedWord").innerHTML = data.masked.split("").map((letter) => `<span class="${letter === "_" ? "blank" : ""}">${letter}</span>`).join("");
   document.getElementById("maskedWord").dataset.missing = data.missing;
   document.getElementById("letterOptions").innerHTML = data.options.map((chunk) => {
@@ -353,21 +612,40 @@ function renderSpelling() {
     return `<button class="letter-btn" data-letter-choice="${chunk}">${label}</button>`;
   }).join("");
   document.getElementById("spellFeedback").textContent = "";
+  document.getElementById("spellFeedback").className = "feedback";
 }
 
 function renderSentence() {
+  const nextSentenceButton = document.getElementById("newSentence");
+  nextSentenceButton.hidden = state.sentenceComplete;
+
+  if (state.sentenceComplete) {
+    document.querySelector("#sentences .prompt-label").textContent = "本轮完成";
+    document.getElementById("sentenceAnswer").innerHTML = "";
+    document.getElementById("sentenceChips").classList.add("summary-actions");
+    document.getElementById("sentenceChips").innerHTML = `
+      <button class="primary-btn" data-retry-sentences>再练一次</button>
+    `;
+    document.getElementById("sentenceFeedback").textContent = "写句子完成，去做下一项吧。";
+    document.getElementById("sentenceFeedback").className = "feedback ok";
+    return;
+  }
+
   const sentence = currentLesson().sentencePrompts[state.sentenceIndex] || currentLesson().sentencePrompts[0];
   const tokens = sentenceTokens(sentence);
   if (!state.sentenceChoices.length) {
     state.sentenceChoices = shuffledSentenceChoices(tokens);
   }
 
+  nextSentenceButton.textContent = state.sentenceIndex >= currentLesson().sentencePrompts.length - 1 ? "完成" : "下一句";
+  document.querySelector("#sentences .prompt-label").textContent = `${state.sentenceIndex + 1}/${currentLesson().sentencePrompts.length} · 点击词块排成句子`;
   document.getElementById("sentenceAnswer").innerHTML = state.selectedSentence.map((item, index) => `
     <button class="chip chip-button selected" data-sentence-selected="${index}">
       ${formatSentenceToken(item.token, index)}
     </button>
   `).join("");
 
+  document.getElementById("sentenceChips").classList.remove("summary-actions");
   document.getElementById("sentenceChips").innerHTML = state.sentenceChoices.map((item) => {
     const used = state.selectedSentence.some((selected) => selected.id === item.id);
     return `
@@ -377,6 +655,7 @@ function renderSentence() {
     `;
   }).join("");
   document.getElementById("sentenceFeedback").textContent = "";
+  document.getElementById("sentenceFeedback").className = "feedback";
 }
 
 function renderReading() {
@@ -399,36 +678,44 @@ function renderReading() {
 function renderReport() {
   const lesson = currentLesson();
   const progress = currentProgress();
-  const weak = progress.weak.length ? progress.weak : lesson.words.slice(0, 3).map((item) => item.word);
+  const weak = progress.weak;
   const accuracy = progress.attempts ? Math.round((progress.correct / progress.attempts) * 100) : 0;
   const doneCount = tasks.filter((task) => progress.done[task.id]).length;
-  const wordScore = Math.min(100, Math.round((progress.mastered.length / lesson.words.length) * 100));
 
   document.getElementById("reportAdvice").textContent =
-    doneCount < 4
-      ? `建议先完成 ${lesson.theme} 单元的四个任务，再复习薄弱词。`
-      : accuracy >= 80
-        ? "今天表现很稳，可以让孩子口头复述阅读短文，再写一句自己的例句。"
-        : "建议先复习错词，再做一次拼写练习，降低挫败感。";
+    weak.length
+      ? "先复习错词，再做一轮拼写。"
+      : doneCount < tasks.length
+        ? "继续完成还没做的任务。"
+        : "本单元完成得不错，可以进入下一单元。";
 
-  document.getElementById("weakWords").innerHTML = weak.map((word) => `
-    <div class="review-item"><strong>${word}</strong><span>建议复习</span></div>
+  document.getElementById("reportSummary").innerHTML = [
+    ["完成", `${doneCount}/${tasks.length}`],
+    ["掌握", `${progress.mastered.length}/${lesson.words.length}`],
+    ["错词", weak.length],
+    ["正确率", `${accuracy}%`]
+  ].map(([label, value]) => `
+    <div class="summary-item"><span>${label}</span><strong>${value}</strong></div>
   `).join("");
 
-  const scores = [
-    ["单词", wordScore],
-    ["拼写", accuracy],
-    ["句子", progress.done.sentences ? 82 : 35],
-    ["阅读", progress.done.reading ? 86 : 40]
-  ];
+  document.getElementById("weakWords").innerHTML = weak.length
+    ? weak.map((word) => `
+      <button class="review-item" data-review-word="${word}">
+        <strong>${titleWord(word)}</strong><span>复习</span>
+      </button>
+    `).join("")
+    : `<div class="empty-note">暂无错词</div>`;
 
-  document.getElementById("skillBars").innerHTML = scores.map(([label, value]) => `
+  document.getElementById("skillBars").innerHTML = tasks.map((task) => {
+    const done = Boolean(progress.done[task.id]);
+    return `
     <div class="bar-row">
-      <span>${label}</span>
-      <div class="bar-track"><div class="bar-fill" style="width: ${value}%"></div></div>
-      <strong>${value}%</strong>
+      <span>${task.title}</span>
+      <div class="bar-track"><div class="bar-fill ${done ? "done" : "todo"}" style="width: ${done ? 100 : 30}%"></div></div>
+      <strong>${done ? "已完成" : "待完成"}</strong>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function renderAll() {
@@ -448,6 +735,24 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const startWordButton = event.target.closest("[data-start-words]");
+  if (startWordButton) {
+    startWords("study");
+    return;
+  }
+
+  const reviewWeakButton = event.target.closest("[data-review-weak]");
+  if (reviewWeakButton && !reviewWeakButton.disabled) {
+    startWeakReview();
+    return;
+  }
+
+  const reviewWord = event.target.closest("[data-review-word]");
+  if (reviewWord) {
+    startWords("quiz", wordIndexByText(reviewWord.dataset.reviewWord), true);
+    return;
+  }
+
   const nav = event.target.closest(".nav-item");
   if (nav) {
     setView(nav.dataset.view);
@@ -456,6 +761,7 @@ document.addEventListener("click", (event) => {
 
   const wordItem = event.target.closest("[data-word-index]");
   if (wordItem) {
+    state.reviewWeakOnly = false;
     state.wordIndex = Number(wordItem.dataset.wordIndex);
     renderWords();
     return;
@@ -463,13 +769,23 @@ document.addEventListener("click", (event) => {
 
   const wordMode = event.target.closest("[data-word-mode]");
   if (wordMode) {
+    state.reviewWeakOnly = false;
     state.wordMode = wordMode.dataset.wordMode;
+    state.wordQuizAnswered = [];
+    state.wordQuizComplete = false;
     renderWords();
+    return;
+  }
+
+  const retryWordQuiz = event.target.closest("[data-retry-word-quiz]");
+  if (retryWordQuiz) {
+    startWords("quiz", 0);
     return;
   }
 
   const sentenceChoice = event.target.closest("[data-sentence-choice]");
   if (sentenceChoice) {
+    if (state.sentenceComplete) return;
     const item = state.sentenceChoices.find((choice) => choice.id === sentenceChoice.dataset.sentenceChoice);
     if (item && !state.selectedSentence.some((selected) => selected.id === item.id)) {
       state.selectedSentence.push(item);
@@ -480,6 +796,7 @@ document.addEventListener("click", (event) => {
 
   const sentenceSelected = event.target.closest("[data-sentence-selected]");
   if (sentenceSelected) {
+    if (state.sentenceComplete) return;
     state.selectedSentence.splice(Number(sentenceSelected.dataset.sentenceSelected), 1);
     renderSentence();
     return;
@@ -496,30 +813,59 @@ document.addEventListener("click", (event) => {
     if (isCorrect) {
       const progress = currentProgress();
       if (!progress.mastered.includes(word.word)) progress.mastered.push(word.word);
+      if (!state.wordQuizAnswered.includes(word.word)) state.wordQuizAnswered.push(word.word);
       markDone("words");
-      scheduleAdvance(() => {
-        state.wordIndex = (state.wordIndex + 1) % currentLesson().words.length;
-        renderWords();
-      });
+      if (state.reviewWeakOnly) {
+        scheduleAdvance(() => {
+          if (progress.weak.length) {
+            state.wordIndex = wordIndexByText(progress.weak[0]);
+            renderWords();
+          } else {
+            finishWordQuiz();
+          }
+        });
+      } else if (state.wordQuizAnswered.length >= currentLesson().words.length) {
+        scheduleAdvance(finishWordQuiz);
+      } else {
+        scheduleAdvance(advanceWord);
+      }
     }
     return;
   }
 
   const letterChoice = event.target.closest("[data-letter-choice]");
   if (letterChoice) {
-    const word = currentLesson().words[state.spellIndex];
+    const word = currentSpellWord();
     const isCorrect = letterChoice.dataset.letterChoice === document.getElementById("maskedWord").dataset.missing;
     const feedback = document.getElementById("spellFeedback");
     feedback.textContent = isCorrect ? `补全正确：${titleWord(word.word)}` : `还差一点，完整单词是 ${titleWord(word.word)}。`;
     feedback.className = `feedback ${isCorrect ? "ok" : "warn"}`;
+    if (!isCorrect && !state.spellingMistakes.includes(word.word)) state.spellingMistakes.push(word.word);
     recordAttempt(isCorrect, word.word);
     if (isCorrect) {
-      markDone("spelling");
-      scheduleAdvance(() => {
-        state.spellIndex = (state.spellIndex + 1) % currentLesson().words.length;
-        renderSpelling();
-      });
+      scheduleAdvance(advanceSpelling);
     }
+    return;
+  }
+
+  const retrySpelling = event.target.closest("[data-retry-spelling]");
+  if (retrySpelling) {
+    resetSpellingSession();
+    return;
+  }
+
+  const reviewSpelling = event.target.closest("[data-review-spelling]");
+  if (reviewSpelling) {
+    const reviewQueue = state.spellingMistakes
+      .map((wordText) => currentLesson().words.findIndex((item) => item.word === wordText))
+      .filter((index) => index >= 0);
+    resetSpellingSession(reviewQueue.length ? reviewQueue : null);
+    return;
+  }
+
+  const retrySentences = event.target.closest("[data-retry-sentences]");
+  if (retrySentences) {
+    resetSentenceSession();
     return;
   }
 
@@ -536,6 +882,7 @@ document.addEventListener("click", (event) => {
     if (isCorrect) {
       const allCorrect = currentLesson().story.quiz.every((_, index) => progress.quizAnswered[index]);
       if (allCorrect) {
+        document.getElementById("quizFeedback").textContent = "阅读完成，去做下一项吧。";
         markDone("reading");
       } else {
         scheduleAdvance(() => {
@@ -561,31 +908,23 @@ document.getElementById("unitSelect").addEventListener("change", (event) => {
 });
 
 document.getElementById("shuffleWords").addEventListener("click", () => {
-  state.wordIndex = (state.wordIndex + 1) % currentLesson().words.length;
-  renderWords();
+  advanceWord();
 });
 
 document.getElementById("wordCard").addEventListener("click", (event) => {
   const word = currentLesson().words[state.wordIndex];
   if (event.target.id === "speakWord") speak(word.word);
   if (event.target.id === "masterWord") {
-    const progress = currentProgress();
-    if (!progress.mastered.includes(word.word)) progress.mastered.push(word.word);
-    markDone("words");
-    renderWords();
+    completeWordStudy(word.word);
   }
 });
 
 document.getElementById("nextSpell").addEventListener("click", () => {
-  state.spellIndex = (state.spellIndex + 1) % currentLesson().words.length;
-  renderSpelling();
+  advanceSpelling();
 });
 
 document.getElementById("newSentence").addEventListener("click", () => {
-  state.sentenceIndex = (state.sentenceIndex + 1) % currentLesson().sentencePrompts.length;
-  state.sentenceChoices = [];
-  state.selectedSentence = [];
-  renderSentence();
+  advanceSentence();
 });
 
 document.getElementById("clearSentence").addEventListener("click", () => {
@@ -601,6 +940,7 @@ document.getElementById("showSample").addEventListener("click", () => {
 });
 
 document.getElementById("checkSentence").addEventListener("click", () => {
+  if (state.sentenceComplete) return;
   const feedback = document.getElementById("sentenceFeedback");
   const prompt = currentLesson().sentencePrompts[state.sentenceIndex] || currentLesson().sentencePrompts[0];
   const target = sentenceTokens(prompt).map((token) => token.toLowerCase()).join(" ");
@@ -610,7 +950,7 @@ document.getElementById("checkSentence").addEventListener("click", () => {
     feedback.textContent = `排列正确：${prompt.sample}`;
     feedback.className = "feedback ok";
     recordAttempt(true);
-    markDone("sentences");
+    scheduleAdvance(advanceSentence);
   } else {
     feedback.textContent = "顺序还需要调整，点上方已选词可以撤回。";
     feedback.className = "feedback warn";

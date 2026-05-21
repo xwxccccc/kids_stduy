@@ -33,7 +33,7 @@
         </div>
 
         <nav class="nav-list">
-          <button class="nav-item active" data-view="dashboard">今日学习</button>
+          <button class="nav-item active" data-view="dashboard">首页</button>
           <button class="nav-item" data-view="words">背单词</button>
           <button class="nav-item" data-view="spelling">拼写练习</button>
           <button class="nav-item" data-view="sentences">写句子</button>
@@ -45,8 +45,7 @@
       <main>
         <header class="topbar">
           <div>
-            <p class="eyebrow" id="courseEyebrow">S3 PDF 知识点提炼复习课</p>
-            <h1>每天 20 分钟，完成听、读、拼、写</h1>
+            <p class="eyebrow" id="courseEyebrow">S3 复习课</p>
           </div>
           <div class="picker-group">
             <label class="grade-picker">
@@ -72,13 +71,12 @@
         <section id="dashboard" class="view active">
           <div class="hero-panel">
             <div class="hero-copy">
-              <p class="kicker" id="unitKicker">今日任务</p>
+              <p class="kicker" id="unitKicker">当前单元</p>
               <h2 id="dailyTitle">从声音到句子，轻松走一遍</h2>
               <p id="dailySubtitle">完成单词卡、拼写、句子和阅读理解，系统会记录掌握情况。</p>
-              <div class="pattern-strip" id="patternStrip"></div>
               <div class="hero-actions">
-                <button class="primary-btn" data-jump="words">开始学习</button>
-                <button class="secondary-btn" data-jump="report">查看报告</button>
+                <button class="primary-btn" data-start-words>继续背单词</button>
+                <button class="secondary-btn" data-review-weak>复习错词</button>
               </div>
             </div>
             <div class="learning-visual" aria-hidden="true">
@@ -99,10 +97,20 @@
             </div>
           </div>
 
+          <div class="weak-strip" id="dashboardWeakWords"></div>
+
+          <section class="knowledge-card" aria-labelledby="knowledgeTitle">
+            <div>
+              <p class="eyebrow">Knowledge</p>
+              <h3 id="knowledgeTitle">本单元知识点</h3>
+            </div>
+            <div class="knowledge-grid" id="knowledgeGrid"></div>
+          </section>
+
           <div class="stats-grid">
-            <article class="stat-card"><span>今日完成</span><strong id="statDone">0/4</strong></article>
+            <article class="stat-card"><span>完成</span><strong id="statDone">0/4</strong></article>
             <article class="stat-card"><span>掌握单词</span><strong id="statMastered">0</strong></article>
-            <article class="stat-card"><span>当前单元</span><strong id="statUnit">1</strong></article>
+            <article class="stat-card"><span>单元</span><strong id="statUnit">1</strong></article>
             <article class="stat-card"><span>正确率</span><strong id="statAccuracy">0%</strong></article>
           </div>
 
@@ -195,16 +203,20 @@
             <button class="secondary-btn small" id="resetProgress">重置本单元</button>
           </div>
           <div class="report-grid">
-            <article class="report-card">
-              <h3>复习建议</h3>
-              <p id="reportAdvice"></p>
+            <article class="report-card wide">
+              <h3>本单元总结</h3>
+              <div class="report-summary" id="reportSummary"></div>
             </article>
             <article class="report-card">
-              <h3>建议复习词</h3>
+              <h3>错词</h3>
               <div id="weakWords"></div>
             </article>
+            <article class="report-card">
+              <h3>下一步</h3>
+              <p id="reportAdvice"></p>
+            </article>
             <article class="report-card wide">
-              <h3>能力条</h3>
+              <h3>任务完成情况</h3>
               <div id="skillBars"></div>
             </article>
           </div>
